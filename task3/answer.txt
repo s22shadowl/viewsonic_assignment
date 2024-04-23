@@ -1,0 +1,73 @@
+1. Simply describe what "function1" will do.
+
+function1 使用 javascript 的 generator 及 yield 語法，配合 react-redux 套件處理 API 的非同步請求。
+當呼叫 function1，函式會先宣告一個新的 AbortController，隨後透過 try catch 嘗試使用 redux-saga 提供的 call 方法透過 axios 呼叫指定 API，並使用 put 方法 dispatch action 將 data 或 error response 送入 reducer，進而更新 state。
+在 try catch 結束後，則會判斷 AbortController 的 abort 方法是否有被呼叫，若有則觸發另一個 action 更新 state。
+
+2. Can we stop what "function1" is doing? How?
+
+function1 送出的 axios 請求是可以取消的，只要執行 function2 即可。
+function2 會呼叫 AbortController 的 abort 方法，由於先前在呼叫 call 方法時有將 ctrl.signal 作為參數傳入，signal 接收到 abort() 的呼叫後會終止 fetch，並拋出一個 AbortError，觸發 function1 中的 catch 和 finally 。
+
+3. How to optimize this snippet?
+
+由於 function1 可以傳入不同的 action 作為參數多次呼叫不同的請求，我認為有兩個較有意義的優化方向：
+其一是目前多次執行 function1 會共用一個 AbortController，當呼叫 function2 只能一次取消全部請求，這部分可以透過修改 AbortController 的實作方式，使得可以根據需求獨立中斷特定的請求，具體實作方式如下：
+
+```
+const controllers = new Map();
+
+function* function1(action) {
+    const ctrl = new AbortController();
+    // 存储 controller，以 action 的某个唯一标识作为键
+    controllers.set(action.id, ctrl);
+
+    ...
+
+    finally {
+        controllers.delete(action.id);
+    }
+
+    ...
+}
+
+function function2(id) {
+    const ctrl = controllers.get(id);
+    if (ctrl) {
+        ctrl.abort();
+    }
+}
+
+```
+
+
+其二是目前在送出請求前，並沒有機制確認 function1 是否是在取得 response 前，重複呼叫了多次同一隻 API，這部分可以透過在 state 中新增 isFetching 的參數來在發送請求前判斷是否會重複發送不必要的請求，具體實作方式如下：
+
+```
+import { call, put, select } from "redux-saga/effects";
+
+let ctrl;
+
+function* function1(action) {
+
+    const isFetching = yield select(state => state[action.name].isFetching);
+    if (isFetching) {
+        return;
+    }
+
+    yield put({ type: 'FETCH_START', name: action.name });
+
+    ...
+
+    try {
+        const { data } = yield call(/** a axios request with config */);
+        yield put({ type: 'FETCH_SUCCESS', payload: data }); 
+    } catch (e) {
+        const er = e.response;
+
+        yield put({ type: 'FETCH_FAILURE', payload: er });
+    }
+
+    ...
+}
+```

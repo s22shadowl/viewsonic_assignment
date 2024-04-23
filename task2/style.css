@@ -1,0 +1,20 @@
+.container {
+    width: 400px;
+    display: flex;
+    border: 1px solid black;
+    margin: 5px;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.buttons {
+    display: flex;
+    flex-shrink:0;
+
+}
+
+.button {
+    border: 1px solid black;
+    margin: 5px;
+}
