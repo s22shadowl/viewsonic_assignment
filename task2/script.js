@@ -1,25 +1,66 @@
 let startTime, endTime
-const worker = new Worker("worker.js")
+let worker
+let isWorkerAvailable = typeof Worker !== "undefined"
 
-worker.onmessage = function (e) {
-  if (e.data.action === "start") {
-    startTime = e.data.time
-  } else if (e.data.action === "end") {
-    endTime = e.data.time
+const textArea = document.querySelector(".time-elapsed")
+
+try {
+  worker = new Worker("worker.js")
+
+  worker.onerror = function (event) {
+    console.error("error: ", event)
+    isWorkerAvailable = false
+  }
+
+  if (isWorkerAvailable) {
+    worker.onmessage = function (e) {
+      if (e.data.action === "timing start") {
+        startTime = e.data.time
+      } else if (e.data.action === "timing end") {
+        endTime = e.data.time
+        const formatTimeElapsed = (endTime - startTime) / 1000
+
+        startTime = undefined
+        endTime = undefined
+
+        textArea.textContent = "Time elapsed: " + formatTimeElapsed + " s"
+      }
+    }
+  }
+} catch (error) {
+  console.log("error", error)
+  isWorkerAvailable = false
+}
+
+const onBeginClick = () => {
+  if (isWorkerAvailable) {
+    worker.postMessage({ action: "timing start" })
+  } else {
+    if (performance.now) {
+      startTime = performance.now()
+    } else {
+      startTime = Date.now()
+    }
+  }
+
+  textArea.textContent = "Time elapsed: timing..."
+}
+
+const onEndClick = () => {
+  if (isWorkerAvailable) {
+    worker.postMessage({ action: "timing end" })
+  } else {
+    if (performance.now) {
+      endTime = performance.now()
+    } else {
+      endTime = Date.now()
+    }
+
     const formatTimeElapsed = (endTime - startTime) / 1000
 
     startTime = undefined
     endTime = undefined
 
-    document.querySelector(".time-elapsed").textContent =
-      "Time-elapsed: " + formatTimeElapsed + " s"
+    textArea.textContent = "Time elapsed: " + formatTimeElapsed + " s"
   }
-}
-
-const onBeginClick = () => {
-  worker.postMessage({ action: "start" })
-}
-
-const onEndClick = () => {
-  worker.postMessage({ action: "end" })
 }

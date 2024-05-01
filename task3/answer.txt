@@ -19,7 +19,6 @@ const controllers = new Map();
 
 function* function1(action) {
     const ctrl = new AbortController();
-    // 存储 controller，以 action 的某个唯一标识作为键
     controllers.set(action.id, ctrl);
 
     ...
